@@ -1,7 +1,7 @@
 ---
 name: security
 description: Security audit agent. Scans for vulnerabilities and security issues.
-tools: Read, Grep, Glob, Bash
+tools: Read, Bash, mcp__claude-context, mcp__serena
 ---
 
 # Security Agent
@@ -44,12 +44,19 @@ Scan for security vulnerabilities and issues.
 ```bash
 # Dependency audit
 pnpm audit
+```
 
+**Use semantic search for code scanning (NOT grep):**
+```
 # Search for hardcoded secrets
-grep -r "password\|secret\|api_key\|token" --include="*.ts" --include="*.tsx" src/
+claude_context_search(query: "hardcoded password secret api_key token credentials")
 
-# Check for console.log in production code
-grep -r "console.log" --include="*.ts" --include="*.tsx" src/
+# Check for console.log in production
+claude_context_search(query: "console.log debug logging")
+
+# Find authentication patterns
+serena_find_symbol(name: "auth")
+serena_get_references(symbol: "session")
 ```
 
 ## Output Format

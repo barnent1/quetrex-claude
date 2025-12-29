@@ -1,5 +1,26 @@
 {
   "mcpServers": {
+    "claude-context": {
+      "command": "npx",
+      "args": ["@zilliz/claude-context-mcp@latest"],
+      "env": {
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "MILVUS_ADDRESS": "${MILVUS_ADDRESS:-}",
+        "MILVUS_TOKEN": "${MILVUS_TOKEN:-}"
+      }
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from", "git+https://github.com/oraios/serena",
+        "serena", "start-mcp-server",
+        "--context", "claude-code",
+        "--project-from-cwd"
+      ],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true"
+      }
+    },
     "memory-keeper": {
       "command": "npx",
       "args": ["mcp-memory-keeper"],

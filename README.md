@@ -1,27 +1,118 @@
 # Quetrex for Claude Code
 
-A hardened Claude Code plugin for autonomous Next.js 15 development with multi-agent orchestration.
+**A production-grade Claude Code plugin that transforms Claude from a coding assistant into an autonomous development system.**
 
-**Created by Glen Barnhardt with the help of Claude Code**
+Created by Glen Barnhardt with the help of Claude Code
 
-## Features
+---
 
-- **Multi-Agent Orchestration** - Parallel autonomous development via WezTerm tabs
-- **Strict TypeScript Enforcement** - No `any`, explicit types, proper error handling
-- **Git Workflow Protection** - Never work on main, always use feature branches/worktrees
-- **Test/Config Guards** - Cannot modify tests to make them pass
-- **Persistent Memory** - Never lose context across sessions via MCP
-- **LSP Integration** - Stop repetitive codebase searching
+## What is Quetrex?
+
+Quetrex solves the fundamental problems with using Claude Code at scale:
+
+| Problem | Quetrex Solution |
+|---------|------------------|
+| **Token burn from grep searches** | Semantic search via Claude Context (~40% savings) |
+| **Context loss between sessions** | Mandatory memory-keeper checkpoints |
+| **Inconsistent code quality** | Strict TypeScript enforcement + lint hooks |
+| **Dangerous git operations** | Branch protection + worktree isolation |
+| **Claude ignoring instructions** | Enforcement hooks + agent routing |
+| **Repetitive codebase exploration** | Symbol-level intelligence via Serena |
+
+## Core Philosophy
+
+> "If you find a bug, document and fix it" - never say "that error was not part of current changes."
+
+Quetrex enforces a **zero-tolerance policy** for:
+- TypeScript `any` types
+- Uncommitted work on main branch
+- Modifying tests to make them pass
+- Ignoring errors "not in scope"
+- Raw grep searches that burn tokens
+
+---
+
+## Key Features
+
+### Semantic Codebase Intelligence
+
+**No more repetitive grep searches.** Quetrex mandates indexed semantic search:
+
+```
+# Claude Context - 40% token savings via vector search
+claude_context_search(query: "authentication middleware")
+
+# Serena - LSP-powered symbol navigation
+serena_find_symbol(name: "UserService")
+serena_get_references(symbol: "handleAuth")
+```
+
+### Multi-Agent Orchestration
+
+Eight specialized agents with defined responsibilities:
+
+| Agent | Role | Can Write Code? |
+|-------|------|-----------------|
+| **Orchestrator** | Coordinates all work | NO |
+| **Designer** | UI/UX prototypes | NO |
+| **Architect** | Technical specs | NO |
+| **Developer** | Implementation | YES |
+| **Test-Runner** | Execute tests | NO (read-only) |
+| **QA-Fixer** | Fix failing tests | YES (not tests) |
+| **Reviewer** | Code review | NO (read-only) |
+| **Security** | Security audit | NO |
+
+### Persistent Memory
+
+Never lose work. Quetrex requires checkpointing every 5-10 tool calls:
+
+```
+context_save(key: "current-task", value: "implementing auth", priority: "high")
+context_checkpoint(name: "auth-progress", description: "JWT middleware complete")
+```
+
+### Enforcement Hooks
+
+| Hook | Trigger | Action |
+|------|---------|--------|
+| `enforce-branch.sh` | Bash commands | Block main branch commits |
+| `typecheck.sh` | After file edits | Run `tsc --noEmit` |
+| `lint.sh` | After file edits | Run `biome check` |
+| `config-guard.sh` | Config file edits | Warn/block changes |
+| `test-guard.sh` | Test file edits | Block modifications |
+| `semantic-search-reminder.sh` | Grep/Glob usage | Suggest Claude Context |
+| `checkpoint-reminder.sh` | Every 10 tools | Remind to checkpoint |
+
+---
 
 ## Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/barnent1/quetrex-claude.git
+### Via Plugin Marketplace (Recommended)
 
-# Install as Claude Code plugin
-claude plugin install ./quetrex-claude
+```bash
+# Inside Claude Code
+/plugin marketplace add barnent1/quetrex-claude
 ```
+
+### Manual Installation
+
+```bash
+git clone https://github.com/barnent1/quetrex-claude.git
+claude --plugin-dir ./quetrex-claude
+```
+
+### Required Environment Variables
+
+```bash
+# For Claude Context (semantic search)
+export OPENAI_API_KEY="sk-..."          # For embeddings
+export MILVUS_TOKEN="your-token"        # Optional: Zilliz Cloud
+
+# For GitHub integration
+export GITHUB_TOKEN="ghp_..."
+```
+
+---
 
 ## Commands
 
@@ -34,103 +125,109 @@ claude plugin install ./quetrex-claude
 | `/spawn <agent>` | Spawn agent in WezTerm tab |
 | `/status` | Check session and agent status |
 | `/ship [issue]` | Create PR with final checks |
-| `/create-term-project` | Create WezTerm tab config |
-| `/change-term-tab-color` | Change WezTerm tab color |
+| `/checkpoint` | Manual memory checkpoint |
+| `/recover` | Restore from previous session |
 
-## Agents
+---
 
-| Agent | Role | Color |
-|-------|------|-------|
-| Orchestrator | Coordinates work, NEVER writes code | Blue |
-| Designer | UI prototypes and user flows | Pink |
-| Architect | Technical specs, tests-first design | Cyan |
-| Developer | Next.js 15 implementation | Green |
-| Test-Runner | Execute tests (READ-ONLY) | Yellow |
-| QA-Fixer | Fix code to pass tests (can't modify tests) | Red |
-| Reviewer | Code review and quality gate | Purple |
-| Security | Security audit and scanning | Orange |
+## Tech Stack (Enforced)
 
-## Tech Stack (Mandatory)
+| Layer | Technology | NOT Allowed |
+|-------|------------|-------------|
+| Framework | Next.js 15 (App Router) | Pages Router |
+| Language | TypeScript (strict) | `any` type |
+| Styling | Tailwind CSS + ShadCN | CSS modules |
+| Animation | Framer Motion | - |
+| Server State | TanStack Query | Raw fetch |
+| Client State | Zustand | Redux, Context |
+| Database | PostgreSQL + Drizzle | Prisma |
+| Cache | Upstash Redis | - |
+| Package Manager | pnpm | npm, yarn |
+| Testing | Vitest + Playwright | Jest |
+| Linting | Biome | ESLint |
 
-| Layer | Technology |
-|-------|------------|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS + ShadCN |
-| Animation | Framer Motion |
-| Server State | TanStack Query |
-| Client State | Zustand |
-| Database | PostgreSQL + Drizzle |
-| Cache | Upstash Redis |
-| Package Manager | pnpm |
-| Testing | Vitest + Playwright |
-| Linting | Biome |
+---
 
-## Skills
+## MCP Servers
 
-- `typescript-strict` - Strict TypeScript rules
-- `nextjs-15-patterns` - App Router patterns and best practices
-- `state-management` - TanStack Query + Zustand patterns
-- `drizzle-patterns` - Drizzle ORM for PostgreSQL
-- `shadcn-framer` - ShadCN UI + Framer Motion
-- `redis-patterns` - Upstash Redis caching
-- `git-workflow` - Worktrees and conventional commits
+Quetrex bundles four MCP servers:
 
-## Workflow
+| Server | Purpose |
+|--------|---------|
+| **claude-context** | Semantic code search with ~40% token savings |
+| **serena** | LSP-powered symbol intelligence |
+| **memory-keeper** | Persistent context across sessions |
+| **github** | Issue/PR automation |
 
-### Starting a Feature
+---
 
-1. **Plan**: `/plan add user authentication`
-   - Designer creates UI mockups
-   - Architect creates technical spec
-   - Human approves before coding
+## Workflow Example
 
-2. **Build**: `/build 42`
-   - Creates worktree: `../worktrees/feature-42-auth`
-   - Developer implements from spec
-   - Test-runner validates
-   - QA-fixer resolves issues
-   - Reviewer approves
-
-3. **Ship**: `/ship 42`
-   - Final quality checks
-   - Creates PR: `gh pr create`
-
-### Multi-Agent Session
+### 1. Plan the Feature
 
 ```bash
-# Spawn a complete dev session
-./scripts/wezterm/spawn-dev-session.sh auth 42
-
-# Or spawn individual agents
-/spawn orchestrator auth
-/spawn developer auth
-/spawn test-runner auth
+/plan add user authentication with JWT
 ```
+
+- Designer creates UI mockups
+- Architect writes technical spec
+- **Human approves before any code is written**
+
+### 2. Build Autonomously
+
+```bash
+/build 42  # GitHub issue number
+```
+
+- Creates worktree: `../worktrees/feature-42-auth`
+- Developer implements from spec
+- Test-runner validates continuously
+- QA-fixer resolves failures (max 10 attempts)
+- Reviewer performs final quality gate
+
+### 3. Ship to Production
+
+```bash
+/ship 42
+```
+
+- Security audit
+- Final test run
+- Creates PR via `gh pr create`
+
+---
 
 ## WezTerm Integration
 
-Tab colors indicate agent type:
-- **Selected tab**: Green dot + colored text
-- **Unselected tab**: Colored background + black text
+Quetrex integrates with WezTerm for visual agent management:
 
-Colors are read from `.wezterm/project.md` or detected from agent type.
+- Each agent gets a color-coded tab
+- Orchestrator: Blue
+- Developer: Green
+- Test-Runner: Yellow
+- QA-Fixer: Red
+- Security: Orange
 
-## Configuration
+Commands:
+- `/create-term-project` - Set up project colors
+- `/change-term-tab-color` - Change current tab
 
-### MCP Servers
+---
 
-- `memory-keeper` - Persistent project memory
-- `github` - GitHub integration for issues/PRs
+## Why "Quetrex"?
 
-### Hooks
+**Que**ue + O**r**ches**t**ration + **Ex**ecution
 
-- `enforce-branch.sh` - Blocks commits on main
-- `typecheck.sh` - Runs `tsc --noEmit` after edits
-- `lint.sh` - Runs `biome check` after edits
-- `config-guard.sh` - Protects config files
-- `test-guard.sh` - Protects test files
+A system that queues work, orchestrates agents, and executes with strict quality controls.
+
+---
 
 ## License
 
 MIT
+
+---
+
+## Contributing
+
+This is Glen Barnhardt's personal development environment. Feel free to fork and adapt for your own workflow.

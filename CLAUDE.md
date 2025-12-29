@@ -32,30 +32,51 @@ The quetrex-claude plugin is ACTIVE. You MUST follow these rules BEFORE any defa
 
 ---
 
-## CODEBASE MAP (CHECK FIRST)
+## SEMANTIC SEARCH (MANDATORY - NO GREP)
 
-**BEFORE searching the codebase, ALWAYS check the codebase map:**
+**NEVER use raw Grep/Glob for codebase exploration. ALWAYS use indexed semantic search.**
 
+Quetrex includes two MCP servers for intelligent code search:
+
+### Claude Context (Primary - ~40% Token Savings)
 ```
-Read: .claude/codebase-map.md
+# Semantic code search - use INSTEAD of Grep
+claude_context_search(query: "authentication middleware")
+claude_context_index()  # Index/re-index the codebase
 ```
 
-The codebase map contains:
-- Directory structure overview
-- Key file locations
-- Component relationships
-- API routes
-- Database schemas
+### Serena (Symbol Intelligence)
+```
+# Symbol-level navigation - functions, classes, variables
+serena_find_symbol(name: "UserService")
+serena_get_references(symbol: "handleAuth")
+serena_analyze_dependencies()
+```
 
-**If `.claude/codebase-map.md` exists:**
-1. Read it FIRST
-2. Use it to guide your search
-3. Only search if needed information is NOT in the map
+### Search Priority Order
 
-**If it doesn't exist:**
-1. Create it after exploring
-2. Save to `.claude/codebase-map.md`
-3. Update it when discovering new patterns
+1. **First**: Use `claude_context_search()` for semantic queries
+2. **Second**: Use `serena_find_symbol()` for specific symbols
+3. **Last Resort**: Only use Grep for exact string literals (error messages, UUIDs)
+
+### Why This Matters
+
+| Method | Token Usage | Accuracy |
+|--------|-------------|----------|
+| Raw Grep | HIGH (burns tokens) | Low (noise) |
+| Claude Context | **~40% less** | High (semantic) |
+| Serena | Minimal | Exact (LSP-based) |
+
+### Indexing Requirements
+
+On first use in a project:
+```
+# Index with Claude Context
+claude_context_index()
+
+# Initialize Serena (auto-detects .git or .serena/project.yml)
+serena_init_project()
+```
 
 ---
 
@@ -82,16 +103,21 @@ Read: skills/{skill-name}/SKILL.md
 ## PROHIBITED BEHAVIORS
 
 1. **NEVER use generic Explore agent** - Use quetrex-claude:orchestrator
-2. **NEVER search without checking codebase map first**
+2. **NEVER use raw Grep/Glob for exploration** - Use Claude Context or Serena first
 3. **NEVER write code without reading relevant skill files**
 4. **NEVER spawn agents directly** - Route through orchestrator for multi-step work
 5. **NEVER ignore Memory-Keeper** - Checkpoint every 5-10 tool calls
+6. **NEVER skip indexing** - Run claude_context_index() on new projects
 
 ---
 
 ## QUICK REFERENCE
 
 ```
+# Semantic search (USE THIS, NOT GREP)
+claude_context_search(query: "what you're looking for")
+serena_find_symbol(name: "ClassName")
+
 # Multi-step task
 Task(subagent_type: "quetrex-claude:orchestrator", prompt: "...")
 
@@ -104,8 +130,9 @@ Task(subagent_type: "quetrex-claude:test-runner", prompt: "...")
 # Architecture planning
 Task(subagent_type: "quetrex-claude:architect", prompt: "...")
 
-# Check codebase first
-Read: .claude/codebase-map.md
+# Index new project (REQUIRED first time)
+claude_context_index()
+serena_init_project()
 ```
 
 ---
@@ -174,10 +201,11 @@ You are working in Glen Barnhardt's development environment. Glen is a 67-year-o
 
 ### Starting Work
 1. Check memory: "What do I know about this project?"
-2. Read codebase-map skill if available
-3. Create/reference GitHub issue
-4. Create feature branch in worktree
-5. Never work in main repo during implementation
+2. **Index codebase if not indexed**: `claude_context_index()`, `serena_init_project()`
+3. Use semantic search to understand context (NOT grep)
+4. Create/reference GitHub issue
+5. Create feature branch in worktree
+6. Never work in main repo during implementation
 
 ### During Work
 1. Run `pnpm tsc --noEmit` after every edit

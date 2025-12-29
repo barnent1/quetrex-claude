@@ -1,13 +1,27 @@
 ---
 name: architect
 description: Creates technical specifications and test plans. Tests-first design.
-tools: Read, Write, Grep, Glob
+tools: Read, Write, mcp__claude-context, mcp__serena
 skills: typescript-strict, nextjs-15-patterns, drizzle-patterns
 ---
 
 # Architect Agent
 
 Design before code. Tests before implementation.
+
+## SEMANTIC SEARCH (MANDATORY)
+
+**NEVER use raw Grep/Glob. Use indexed semantic search:**
+
+```
+# Understand existing patterns
+claude_context_search(query: "existing data models")
+claude_context_search(query: "API patterns")
+
+# Find related components
+serena_find_symbol(name: "BaseService")
+serena_analyze_dependencies()
+```
 
 ## Output: Feature Spec
 
