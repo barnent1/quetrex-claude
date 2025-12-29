@@ -1,5 +1,8 @@
 name: AI Agent (Claude Code)
 
+# Anthropic Best Practices: Explore → Plan → Code → Commit
+# Flexible flows based on issue labels
+
 on:
   workflow_dispatch:
     inputs:
@@ -15,9 +18,14 @@ permissions:
   issues: write
   pull-requests: write
 
+env:
+  WORKTREE_BASE: /Users/barnent1/worktrees
+
 jobs:
-  ai-agent:
-    # Trigger on any ai-* label
+  # ============================================================
+  # ORCHESTRATOR - Determines flow based on labels
+  # ============================================================
+  orchestrate:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' &&
@@ -28,10 +36,18 @@ jobs:
         contains(github.event.issue.labels.*.name, 'ai-test')))
 
     runs-on: [self-hosted, macOS, quetrex]
-    timeout-minutes: 120
+    timeout-minutes: 10
 
-    env:
-      WORKTREE_BASE: /Users/barnent1/worktrees
+    outputs:
+      issue_number: ${{ steps.issue.outputs.number }}
+      issue_title: ${{ steps.issue.outputs.title }}
+      issue_type: ${{ steps.issue.outputs.type }}
+      branch_prefix: ${{ steps.issue.outputs.prefix }}
+      flow: ${{ steps.flow.outputs.flow }}
+      needs_design: ${{ steps.flow.outputs.needs_design }}
+      needs_security: ${{ steps.flow.outputs.needs_security }}
+      worktree_path: ${{ steps.worktree.outputs.path }}
+      branch_name: ${{ steps.worktree.outputs.branch }}
 
     steps:
       - name: Get issue details
@@ -42,16 +58,14 @@ jobs:
           ISSUE_NUMBER=${{ github.event.inputs.issue_number || github.event.issue.number }}
           echo "number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
 
-          # Get issue details
           ISSUE_JSON=$(gh issue view "$ISSUE_NUMBER" --repo ${{ github.repository }} --json title,body,labels)
           ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
-          ISSUE_BODY=$(echo "$ISSUE_JSON" | jq -r '.body')
           ISSUE_LABELS=$(echo "$ISSUE_JSON" | jq -r '.labels[].name' | tr '\n' ',' | sed 's/,$//')
 
           echo "title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
           echo "labels=$ISSUE_LABELS" >> $GITHUB_OUTPUT
 
-          # Determine issue type from label
+          # Determine type and prefix
           if echo "$ISSUE_LABELS" | grep -q "ai-feature"; then
             echo "type=feature" >> $GITHUB_OUTPUT
             echo "prefix=feature" >> $GITHUB_OUTPUT
@@ -67,30 +81,49 @@ jobs:
           elif echo "$ISSUE_LABELS" | grep -q "ai-test"; then
             echo "type=test" >> $GITHUB_OUTPUT
             echo "prefix=test" >> $GITHUB_OUTPUT
-          else
-            echo "type=feature" >> $GITHUB_OUTPUT
-            echo "prefix=feature" >> $GITHUB_OUTPUT
           fi
 
-          # Save body to file for multi-line handling
-          echo "$ISSUE_BODY" > /tmp/issue_body.txt
+          # Save body for later
+          echo "$ISSUE_JSON" | jq -r '.body' > /tmp/issue_body_$ISSUE_NUMBER.txt
 
-      - name: Comment - Starting work
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Determine flow
+        id: flow
         run: |
-          gh issue comment ${{ steps.issue.outputs.number }} \
-            --repo ${{ github.repository }} \
-            --body "🤖 **AI Agent Starting**
+          LABELS="${{ steps.issue.outputs.labels }}"
+          TYPE="${{ steps.issue.outputs.type }}"
 
-          | Detail | Value |
-          |--------|-------|
-          | Type | \`${{ steps.issue.outputs.type }}\` |
-          | Branch | \`${{ steps.issue.outputs.prefix }}/issue-${{ steps.issue.outputs.number }}\` |
-          | Runner | \`quetrex-runner\` |
-          | Run | [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          # Determine flow based on labels
+          if echo "$LABELS" | grep -q "ui"; then
+            echo "flow=full-ui" >> $GITHUB_OUTPUT
+            echo "needs_design=true" >> $GITHUB_OUTPUT
+          elif echo "$LABELS" | grep -q "backend"; then
+            echo "flow=backend" >> $GITHUB_OUTPUT
+            echo "needs_design=false" >> $GITHUB_OUTPUT
+          elif [ "$TYPE" = "bug" ]; then
+            echo "flow=bug-fix" >> $GITHUB_OUTPUT
+            echo "needs_design=false" >> $GITHUB_OUTPUT
+          elif [ "$TYPE" = "refactor" ]; then
+            echo "flow=refactor" >> $GITHUB_OUTPUT
+            echo "needs_design=false" >> $GITHUB_OUTPUT
+          elif [ "$TYPE" = "docs" ]; then
+            echo "flow=docs" >> $GITHUB_OUTPUT
+            echo "needs_design=false" >> $GITHUB_OUTPUT
+          elif [ "$TYPE" = "test" ]; then
+            echo "flow=test" >> $GITHUB_OUTPUT
+            echo "needs_design=false" >> $GITHUB_OUTPUT
+          else
+            echo "flow=backend" >> $GITHUB_OUTPUT
+            echo "needs_design=false" >> $GITHUB_OUTPUT
+          fi
 
-          Working on: **${{ steps.issue.outputs.title }}**"
+          # Security check
+          if echo "$LABELS" | grep -q "skip-security"; then
+            echo "needs_security=false" >> $GITHUB_OUTPUT
+          elif [ "$TYPE" = "docs" ]; then
+            echo "needs_security=false" >> $GITHUB_OUTPUT
+          else
+            echo "needs_security=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -107,101 +140,366 @@ jobs:
           echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "path=$WORKTREE_PATH" >> $GITHUB_OUTPUT
 
-          # Create worktree directory
           mkdir -p "$WORKTREE_BASE/${{ github.event.repository.name }}"
 
-          # Clean up existing worktree if present
+          # Clean up existing
           if [ -d "$WORKTREE_PATH" ]; then
             git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || rm -rf "$WORKTREE_PATH"
           fi
-
-          # Delete branch if exists (clean start)
           git branch -D "$BRANCH_NAME" 2>/dev/null || true
           git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
 
-          # Create new branch and worktree
+          # Create new worktree
           git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" origin/main
 
-          echo "✅ Worktree created at: $WORKTREE_PATH"
-
-      - name: Setup dependencies
-        run: |
-          cd ${{ steps.worktree.outputs.path }}
-
-          # Install dependencies if package.json exists
+          # Install dependencies
+          cd "$WORKTREE_PATH"
           if [ -f "package.json" ]; then
             npm install --legacy-peer-deps
-            echo "✅ Dependencies installed"
-          else
-            echo "ℹ️ No package.json found, skipping npm install"
           fi
 
-      - name: Run Claude Code
-        id: claude
-        working-directory: ${{ steps.worktree.outputs.path }}
+      - name: Comment - Starting
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUMBER=${{ steps.issue.outputs.number }}
-          ISSUE_TITLE="${{ steps.issue.outputs.title }}"
-          ISSUE_TYPE="${{ steps.issue.outputs.type }}"
-          ISSUE_BODY=$(cat /tmp/issue_body.txt)
+          gh issue comment ${{ steps.issue.outputs.number }} \
+            --repo ${{ github.repository }} \
+            --body "🤖 **AI Agent Starting**
 
-          # Configure git
+          | Detail | Value |
+          |--------|-------|
+          | Flow | \`${{ steps.flow.outputs.flow }}\` |
+          | Type | \`${{ steps.issue.outputs.type }}\` |
+          | Branch | \`${{ steps.worktree.outputs.branch }}\` |
+          | Design Phase | ${{ steps.flow.outputs.needs_design }} |
+          | Security Scan | ${{ steps.flow.outputs.needs_security }} |
+
+          **Working on:** ${{ steps.issue.outputs.title }}
+
+          [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+
+  # ============================================================
+  # ARCHITECT - Creates spec + test plan (TDD)
+  # Skipped for: docs, simple bugs
+  # ============================================================
+  architect:
+    needs: orchestrate
+    if: |
+      needs.orchestrate.outputs.flow == 'full-ui' ||
+      needs.orchestrate.outputs.flow == 'backend' ||
+      needs.orchestrate.outputs.flow == 'refactor'
+
+    runs-on: [self-hosted, macOS, quetrex]
+    timeout-minutes: 30
+
+    steps:
+      - name: Run Architect Agent
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          ISSUE_NUMBER=${{ needs.orchestrate.outputs.issue_number }}
+          ISSUE_TITLE="${{ needs.orchestrate.outputs.issue_title }}"
+          ISSUE_BODY=$(cat /tmp/issue_body_$ISSUE_NUMBER.txt 2>/dev/null || echo "No description")
+
           git config user.name "Quetrex AI Agent"
           git config user.email "agent@quetrex.dev"
 
-          # Run Claude with the issue context
-          claude -p "You are working on GitHub Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
+          claude -p "You are the ARCHITECT agent for Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
 
-          Issue Type: ${ISSUE_TYPE}
+          Description:
+          ${ISSUE_BODY}
+
+          Your job (Anthropic Best Practice - Plan before Code):
+          1. Read CLAUDE.md for project conventions
+          2. Explore relevant code to understand the codebase
+          3. Create a technical specification in docs/specs/issue-${ISSUE_NUMBER}-spec.md:
+             - Overview of changes needed
+             - Files to modify/create
+             - Test plan (TDD - tests first!)
+             - Edge cases to handle
+          4. Commit the spec file
+
+          Do NOT write implementation code. Only create the spec.
+          Use 'think hard' to plan thoroughly." \
+            --dangerously-skip-permissions
+
+      - name: Push spec
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git push -u origin ${{ needs.orchestrate.outputs.branch_name }}
+          fi
+
+  # ============================================================
+  # DEVELOPER - Writes tests first, then implements (TDD)
+  # ============================================================
+  developer:
+    needs: [orchestrate, architect]
+    if: always() && needs.orchestrate.result == 'success'
+
+    runs-on: [self-hosted, macOS, quetrex]
+    timeout-minutes: 60
+
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+
+    steps:
+      - name: Run Developer Agent
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          ISSUE_NUMBER=${{ needs.orchestrate.outputs.issue_number }}
+          ISSUE_TITLE="${{ needs.orchestrate.outputs.issue_title }}"
+          ISSUE_TYPE="${{ needs.orchestrate.outputs.issue_type }}"
+          FLOW="${{ needs.orchestrate.outputs.flow }}"
+          ISSUE_BODY=$(cat /tmp/issue_body_$ISSUE_NUMBER.txt 2>/dev/null || echo "No description")
+
+          git config user.name "Quetrex AI Agent"
+          git config user.email "agent@quetrex.dev"
+
+          # Pull any architect changes
+          git pull origin ${{ needs.orchestrate.outputs.branch_name }} 2>/dev/null || true
+
+          if [ "$FLOW" = "docs" ]; then
+            PROMPT="You are the DEVELOPER agent for Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
+
+          This is a DOCUMENTATION task.
 
           Description:
           ${ISSUE_BODY}
 
           Instructions:
-          1. Read CLAUDE.md first if it exists for project conventions
-          2. Implement the requested changes
-          3. Test your changes if possible
-          4. Commit your changes with conventional commit format
-          5. Do NOT create a PR - just commit to this branch
+          1. Read CLAUDE.md for project conventions
+          2. Create or update the requested documentation
+          3. Commit your changes
 
-          Branch: ${{ steps.worktree.outputs.branch }}
+          Do NOT write code unless explicitly needed for examples."
+          else
+            PROMPT="You are the DEVELOPER agent for Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
 
-          When done, provide a summary of what you implemented." \
-            --dangerously-skip-permissions \
-            2>&1 | tee /tmp/claude_output.txt
+          Issue Type: ${ISSUE_TYPE}
+          Flow: ${FLOW}
 
-          # Check if there are commits
-          COMMIT_COUNT=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "0")
-          echo "commits=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          Description:
+          ${ISSUE_BODY}
+
+          Instructions (TDD - Anthropic Best Practice):
+          1. Read CLAUDE.md for project conventions
+          2. If spec exists at docs/specs/issue-${ISSUE_NUMBER}-spec.md, follow it
+          3. Write TESTS FIRST:
+             - Create test file(s) for the feature
+             - Run tests to confirm they FAIL
+             - Commit the failing tests
+          4. Implement code to make tests PASS:
+             - Write minimal code to pass tests
+             - Run tests to confirm they PASS
+             - Commit the implementation
+          5. Run type-check and fix any errors
+
+          Use 'think hard' for complex logic."
+          fi
+
+          claude -p "$PROMPT" --dangerously-skip-permissions
+
+      - name: Check for changes
+        id: check
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          COMMITS=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "0")
+          if [ "$COMMITS" -gt "0" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Push changes
-        if: steps.claude.outputs.commits != '0'
-        working-directory: ${{ steps.worktree.outputs.path }}
+        if: steps.check.outputs.has_changes == 'true'
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
         run: |
-          git push -u origin ${{ steps.worktree.outputs.branch }}
-          echo "✅ Changes pushed to ${{ steps.worktree.outputs.branch }}"
+          git push -u origin ${{ needs.orchestrate.outputs.branch_name }}
 
-      - name: Comment - Work complete
-        if: always()
+  # ============================================================
+  # TEST-RUNNER - Runs all tests
+  # ============================================================
+  test-runner:
+    needs: [orchestrate, developer]
+    if: |
+      needs.developer.outputs.has_changes == 'true' &&
+      needs.orchestrate.outputs.flow != 'docs'
+
+    runs-on: [self-hosted, macOS, quetrex]
+    timeout-minutes: 20
+
+    outputs:
+      tests_passed: ${{ steps.test.outputs.passed }}
+
+    steps:
+      - name: Run tests
+        id: test
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          git pull origin ${{ needs.orchestrate.outputs.branch_name }} 2>/dev/null || true
+
+          # Run type-check if available
+          if npm run type-check 2>/dev/null; then
+            echo "Type check passed"
+          else
+            echo "Type check failed or not available"
+          fi
+
+          # Run tests if they exist
+          if npm test 2>/dev/null; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================
+  # REVIEWER - Code quality check
+  # ============================================================
+  reviewer:
+    needs: [orchestrate, developer, test-runner]
+    if: |
+      always() &&
+      needs.developer.outputs.has_changes == 'true' &&
+      needs.orchestrate.outputs.flow != 'docs'
+
+    runs-on: [self-hosted, macOS, quetrex]
+    timeout-minutes: 20
+
+    steps:
+      - name: Run Reviewer Agent
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          ISSUE_NUMBER=${{ needs.orchestrate.outputs.issue_number }}
+
+          git pull origin ${{ needs.orchestrate.outputs.branch_name }} 2>/dev/null || true
+
+          claude -p "You are the REVIEWER agent for Issue #${ISSUE_NUMBER}.
+
+          Review the changes made in this branch (compare to origin/main):
+          1. Run: git diff origin/main..HEAD
+          2. Check for:
+             - Code quality and readability
+             - Naming convention compliance (see CLAUDE.md)
+             - TypeScript best practices (no 'any' types)
+             - Proper error handling
+             - Missing edge cases
+          3. If issues found, fix them and commit
+          4. Provide a summary of your review
+
+          Do NOT refactor working code unnecessarily." \
+            --dangerously-skip-permissions
+
+          # Push any fixes
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "review: address code quality issues
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+          Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+            git push origin ${{ needs.orchestrate.outputs.branch_name }}
+          fi
+
+  # ============================================================
+  # SECURITY - Security audit
+  # ============================================================
+  security:
+    needs: [orchestrate, developer, reviewer]
+    if: |
+      always() &&
+      needs.developer.outputs.has_changes == 'true' &&
+      needs.orchestrate.outputs.needs_security == 'true'
+
+    runs-on: [self-hosted, macOS, quetrex]
+    timeout-minutes: 15
+
+    steps:
+      - name: Run Security Agent
+        working-directory: ${{ needs.orchestrate.outputs.worktree_path }}
+        run: |
+          ISSUE_NUMBER=${{ needs.orchestrate.outputs.issue_number }}
+
+          git pull origin ${{ needs.orchestrate.outputs.branch_name }} 2>/dev/null || true
+
+          claude -p "You are the SECURITY agent for Issue #${ISSUE_NUMBER}.
+
+          Scan the changes for security vulnerabilities:
+          1. Run: git diff origin/main..HEAD
+          2. Check for OWASP Top 10:
+             - SQL injection
+             - XSS vulnerabilities
+             - Command injection
+             - Sensitive data exposure
+             - Insecure authentication
+          3. Check for:
+             - Hardcoded secrets/API keys
+             - Unsafe eval() or similar
+             - Missing input validation
+          4. If critical issues found, fix them and commit
+          5. Report findings
+
+          Only flag REAL security issues, not style preferences." \
+            --dangerously-skip-permissions
+
+          # Push any fixes
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "security: address vulnerability findings
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+          Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+            git push origin ${{ needs.orchestrate.outputs.branch_name }}
+          fi
+
+  # ============================================================
+  # COMPLETE - Report results
+  # ============================================================
+  complete:
+    needs: [orchestrate, developer, test-runner, reviewer, security]
+    if: always()
+
+    runs-on: [self-hosted, macOS, quetrex]
+    timeout-minutes: 5
+
+    steps:
+      - name: Report completion
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE_NUMBER=${{ steps.issue.outputs.number }}
-          BRANCH_NAME="${{ steps.worktree.outputs.branch }}"
-          WORKTREE_PATH="${{ steps.worktree.outputs.path }}"
-          COMMIT_COUNT="${{ steps.claude.outputs.commits }}"
+          ISSUE_NUMBER=${{ needs.orchestrate.outputs.issue_number }}
+          BRANCH_NAME="${{ needs.orchestrate.outputs.branch_name }}"
+          WORKTREE_PATH="${{ needs.orchestrate.outputs.worktree_path }}"
+          HAS_CHANGES="${{ needs.developer.outputs.has_changes }}"
+          TESTS_PASSED="${{ needs.test-runner.outputs.tests_passed }}"
 
-          if [ "${{ job.status }}" == "success" ] && [ "$COMMIT_COUNT" != "0" ]; then
-            # Get commit summary
-            cd "$WORKTREE_PATH" 2>/dev/null && \
-            COMMITS=$(git log --oneline origin/main..HEAD 2>/dev/null | head -10) || \
-            COMMITS="Unable to get commit list"
+          # Get commit summary
+          cd "$WORKTREE_PATH" 2>/dev/null && \
+          COMMITS=$(git log --oneline origin/main..HEAD 2>/dev/null | head -15) || \
+          COMMITS="Unable to get commits"
+
+          if [ "$HAS_CHANGES" = "true" ]; then
+            if [ "$TESTS_PASSED" = "false" ]; then
+              STATUS="⚠️ Complete with test failures"
+            else
+              STATUS="✅ Complete"
+            fi
 
             gh issue comment "$ISSUE_NUMBER" \
               --repo ${{ github.repository }} \
-              --body "✅ **AI Agent Complete**
+              --body "${STATUS} **AI Agent Pipeline Finished**
 
-          ## Changes Made
+          ## Pipeline Results
+          | Stage | Status |
+          |-------|--------|
+          | Orchestrate | ✅ |
+          | Architect | ${{ needs.architect.result == 'success' && '✅' || needs.architect.result == 'skipped' && '⏭️ Skipped' || '❌' }} |
+          | Developer | ${{ needs.developer.result == 'success' && '✅' || '❌' }} |
+          | Test Runner | ${{ needs.test-runner.result == 'success' && '✅' || needs.test-runner.result == 'skipped' && '⏭️ Skipped' || '❌' }} |
+          | Reviewer | ${{ needs.reviewer.result == 'success' && '✅' || needs.reviewer.result == 'skipped' && '⏭️ Skipped' || '❌' }} |
+          | Security | ${{ needs.security.result == 'success' && '✅' || needs.security.result == 'skipped' && '⏭️ Skipped' || '❌' }} |
+
+          ## Commits
           \`\`\`
           $COMMITS
           \`\`\`
@@ -210,32 +508,20 @@ jobs:
           1. **Test locally:**
              \`\`\`bash
              cd $WORKTREE_PATH
-             npm run dev  # if applicable
+             npm run dev
              \`\`\`
-          2. **When ready, tell me:** \`create PR for issue #${ISSUE_NUMBER}\`
+          2. **When ready:** \`create PR for issue #${ISSUE_NUMBER}\`
           3. **After review:** \`merge PR\` or merge manually
 
           ---
           [View Branch](https://github.com/${{ github.repository }}/tree/${BRANCH_NAME}) | [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
-          elif [ "${{ job.status }}" == "success" ] && [ "$COMMIT_COUNT" == "0" ]; then
-            gh issue comment "$ISSUE_NUMBER" \
-              --repo ${{ github.repository }} \
-              --body "⚠️ **AI Agent Complete - No Changes**
-
-          The agent ran successfully but made no commits. This could mean:
-          - The issue was already resolved
-          - The agent couldn't determine what changes to make
-          - The agent encountered an issue
-
-          [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
           else
             gh issue comment "$ISSUE_NUMBER" \
               --repo ${{ github.repository }} \
-              --body "❌ **AI Agent Failed**
+              --body "⚠️ **AI Agent Complete - No Changes Made**
 
-          The agent encountered an error. Please check the logs.
+          The pipeline completed but no commits were created.
 
           [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           fi
