@@ -1,0 +1,37 @@
+{
+  "name": "quetrex-claude",
+  "version": "1.0.0",
+  "description": "Quetrex for Claude Code - Glen's hardened environment for autonomous Next.js 15 development",
+  "author": {
+    "name": "Glen Barnhardt"
+  },
+  "homepage": "https://github.com/barnent1/quetrex-claude",
+  "repository": "https://github.com/barnent1/quetrex-claude",
+  "license": "MIT",
+  "keywords": ["nextjs", "typescript", "autonomous", "multi-agent", "wezterm"],
+  "commands": [
+    "./commands/init.md",
+    "./commands/plan.md",
+    "./commands/build.md",
+    "./commands/fix.md",
+    "./commands/spawn.md",
+    "./commands/status.md",
+    "./commands/ship.md",
+    "./commands/create-term-project.md",
+    "./commands/change-term-tab-color.md"
+  ],
+  "agents": [
+    "./agents/orchestrator.md",
+    "./agents/designer.md",
+    "./agents/architect.md",
+    "./agents/nextjs-developer.md",
+    "./agents/test-runner.md",
+    "./agents/qa-fixer.md",
+    "./agents/reviewer.md",
+    "./agents/security.md"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json",
+  "lspServers": "./.lsp.json"
+}
