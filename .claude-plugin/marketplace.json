@@ -1,0 +1,26 @@
+{
+  "name": "quetrex",
+  "owner": {
+    "name": "Glen Barnhardt",
+    "email": "glen@barnhardt.com"
+  },
+  "metadata": {
+    "description": "Glen's hardened Claude Code environment for autonomous Next.js 15 development"
+  },
+  "plugins": [
+    {
+      "name": "quetrex-claude",
+      "source": ".",
+      "description": "Multi-agent orchestration plugin for autonomous Next.js 15 development with strict TypeScript, git workflow protection, and WezTerm integration",
+      "version": "1.0.0",
+      "author": {
+        "name": "Glen Barnhardt"
+      },
+      "homepage": "https://github.com/barnent1/quetrex-claude",
+      "repository": "https://github.com/barnent1/quetrex-claude",
+      "license": "MIT",
+      "keywords": ["nextjs", "typescript", "multi-agent", "autonomous", "wezterm", "orchestration"],
+      "category": "development"
+    }
+  ]
+}
