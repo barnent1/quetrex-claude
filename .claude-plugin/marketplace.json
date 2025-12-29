@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "quetrex-claude",
-      "source": ".",
+      "source": "./",
       "description": "Multi-agent orchestration plugin for autonomous Next.js 15 development with strict TypeScript, git workflow protection, and WezTerm integration",
       "version": "1.0.0",
       "author": {
