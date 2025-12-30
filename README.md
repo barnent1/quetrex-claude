@@ -62,13 +62,31 @@ mcp__serena__replace_symbol_body(name_path: "getUser", relative_path: "...", bod
 mcp__serena__rename_symbol(name_path: "oldName", relative_path: "...", new_name: "newName")
 ```
 
+### Memory Architecture (Prevents Wrong Fixes)
+
+The biggest problems with AI coding: wrong fixes and forgotten directives. Quetrex solves both:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  memory-curator agent                                   │
+├─────────────────────────────────────────────────────────┤
+│  • Compiles focused briefings at session start         │
+│  • Verifies fixes against architecture-truth.md        │
+│  • Records mistakes to blockers.md to prevent repeat   │
+│  • Re-injects critical rules that must not be forgot   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key Principle:** When search results contradict `architecture-truth.md`, THE DOCUMENT IS RIGHT.
+
 ### Multi-Agent Orchestration
 
-Eight specialized agents with defined responsibilities:
+Nine specialized agents with defined responsibilities:
 
 | Agent | Role | Can Write Code? |
 |-------|------|-----------------|
 | **Orchestrator** | Coordinates all work | NO |
+| **Memory-Curator** | Briefings, fix verification, mistake tracking | NO |
 | **Designer** | UI/UX prototypes | NO |
 | **Architect** | Technical specs | NO |
 | **Developer** | Implementation | YES |

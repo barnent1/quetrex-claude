@@ -175,6 +175,62 @@ mcp__serena__read_memory(memory_file_name: "architecture.md")
 
 ---
 
+## MEMORY ARCHITECTURE (PREVENTS WRONG FIXES)
+
+Quetrex uses a **memory-curator agent** to prevent the two biggest AI coding problems:
+1. **Wrong fixes** - Modifying the wrong code because search returned multiple results
+2. **Forgotten directives** - Ignoring rules because context got long
+
+### Memory Files (Stored via Serena)
+
+| File | Purpose | Authority |
+|------|---------|-----------|
+| `enforced-rules.md` | Blocking rules that HALT execution | HIGHEST |
+| `architecture-truth.md` | What code does what, correct locations | AUTHORITATIVE |
+| `session-state.md` | Current task, progress, next action | Updated frequently |
+| `decisions.md` | Why we chose X over Y | Reference |
+| `blockers.md` | Past mistakes - DO NOT REPEAT | BLOCKING |
+
+### Critical Principle
+
+**When search results contradict architecture-truth.md, THE DOCUMENT IS RIGHT.**
+
+### Workflow
+
+**Session Start:**
+```
+Task(subagent_type: "quetrex-claude:memory-curator", prompt: "Task: brief")
+```
+
+**Before ANY Fix:**
+```
+Task(subagent_type: "quetrex-claude:memory-curator",
+     prompt: "Task: verify-fix. file_path: X, issue: Y, proposed_change: Z")
+# ONLY proceed if verdict is APPROVED
+```
+
+**After Wrong Fix Discovered:**
+```
+Task(subagent_type: "quetrex-claude:memory-curator",
+     prompt: "Task: record-mistake. attempted_fix: X, why_wrong: Y, correct_approach: Z")
+```
+
+**Before Context Exhaustion:**
+```
+Task(subagent_type: "quetrex-claude:memory-curator", prompt: "Task: compress")
+```
+
+### Templates
+
+Copy templates from `templates/` to initialize memory files:
+- `templates/architecture-truth.md`
+- `templates/enforced-rules.md`
+- `templates/session-state.md`
+- `templates/decisions.md`
+- `templates/blockers.md`
+
+---
+
 ## SKILL ENFORCEMENT
 
 These skills are MANDATORY for their domains - not optional:
@@ -201,7 +257,9 @@ Read: skills/{skill-name}/SKILL.md
 2. **NEVER use raw Grep/Glob for exploration** - Use Serena's semantic tools first
 3. **NEVER write code without reading relevant skill files**
 4. **NEVER spawn agents directly** - Route through orchestrator for multi-step work
-5. **NEVER ignore Memory-Keeper** - Checkpoint every 5-10 tool calls
+5. **NEVER fix code without verify-fix** - Spawn memory-curator to verify first
+6. **NEVER skip session briefing** - Always start with memory-curator "brief" task
+7. **NEVER ignore architecture-truth.md** - If search contradicts it, trust the document
 
 ---
 

@@ -116,41 +116,87 @@ Track failures: `{agent: {task: count}}`
 
 ---
 
-## MANDATORY: Memory-Keeper Checkpointing
+## MANDATORY: Memory Architecture
 
-**FAILURE TO CHECKPOINT = POTENTIAL TOTAL WORK LOSS**
+**FAILURE TO USE MEMORY = WRONG FIXES + LOST CONTEXT**
 
-You MUST save progress to memory-keeper continuously:
+You MUST use the memory-curator agent and Serena memories for continuity.
 
-### Before Delegating to Any Agent
-```
-context_save(key: "delegating-to", value: "<agent-name>: <task description>", category: "orchestration", priority: "high")
-```
+### Session Start (ALWAYS DO THIS FIRST)
 
-### After Each Agent Completes
 ```
-context_save(key: "completed-<agent>", value: "<summary of work done>", category: "progress")
-context_checkpoint(name: "post-<agent>-work", description: "<current overall state>")
-```
+# 1. Spawn memory-curator for briefing
+Task(
+  subagent_type: "quetrex-claude:memory-curator",
+  prompt: "Task: brief. Compile session briefing from memories."
+)
 
-### Every 5-10 Tool Calls
-```
-context_checkpoint(name: "checkpoint-<timestamp>", description: "<current orchestration state>")
+# 2. Read and internalize the briefing
+# 3. Proceed with work
 ```
 
-### Before Large Operations
+### Before ANY Code Fix (MANDATORY)
+
 ```
-context_prepare_compaction()
+# Spawn memory-curator to verify fix
+Task(
+  subagent_type: "quetrex-claude:memory-curator",
+  prompt: "Task: verify-fix. file_path: [path], issue: [description], proposed_change: [what we plan to do]"
+)
+
+# ONLY proceed if verdict is APPROVED
+# If BLOCKED or NEEDS CLARIFICATION, stop and address
 ```
 
-### Before Ending Session
+### During Work - Write to Memory
+
 ```
-context_checkpoint(name: "session-end", description: "<full state summary>")
-context_save(key: "next-action", value: "<what needs to happen next>", priority: "high")
+# Update session state periodically
+mcp__serena__write_memory(
+  memory_file_name: "session-state.md",
+  content: "# Session State\n\n## Current Task\n[task]\n\n## Progress\n[%]\n\n## Next Action\n[next step]"
+)
+
+# Record important decisions
+mcp__serena__read_memory(memory_file_name: "decisions.md")
+# Append new decision, then:
+mcp__serena__write_memory(memory_file_name: "decisions.md", content: "[updated content]")
 ```
 
-### Key Items to Always Track
-- `current-task`: What you're currently orchestrating
-- `delegation-queue`: Pending agent tasks
-- `completed-work`: Summary of finished work
-- `next-action`: What should happen next if session ends
+### When Context Gets Low
+
+```
+# Spawn memory-curator to save state
+Task(
+  subagent_type: "quetrex-claude:memory-curator",
+  prompt: "Task: compress. Save comprehensive state before context exhaustion."
+)
+
+# Wait for confirmation, then safe to end session
+```
+
+### After Wrong Fix Discovered
+
+```
+# Record the mistake to prevent repetition
+Task(
+  subagent_type: "quetrex-claude:memory-curator",
+  prompt: "Task: record-mistake. attempted_fix: [what], why_wrong: [why], correct_approach: [what to do]"
+)
+```
+
+### Memory Files (Stored via Serena)
+
+| File | Purpose | When to Update |
+|------|---------|----------------|
+| `enforced-rules.md` | Blocking rules | Rarely (user only) |
+| `architecture-truth.md` | What code does what | After refactors |
+| `session-state.md` | Current progress | Every 10-15 mins |
+| `decisions.md` | Why we chose X | After decisions |
+| `blockers.md` | Past mistakes | After wrong fixes |
+
+### Critical Principle
+
+**When search results contradict architecture-truth.md, THE DOCUMENT IS RIGHT.**
+
+Never fix code without verifying it's the correct file. The memory-curator enforces this.
